@@ -64,10 +64,10 @@ if __name__ == "__main__":
     if not wallets:
         # hardcoded fallback for quick test
         wallets = [
-            {"label": "dnm-oct", "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh", "balance_sat": 4200000},
-            {"label": "dnm-nov", "address": "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", "balance_sat": 3150000},
-            {"label": "misc",    "address": "bc1q9d80wqfzqa3dc5gqy0rj3gn55e506ggv0v4p8t", "balance_sat": 870000},
+            {"label": "dnm-oct", "address": "bc1qxy2kgdygjr", "balance_sat": 4200000},
+            {"label": "dnm-nov", "address": "bc1qar0srrr", "balance_sat": 3150000},
+            {"label": "misc",    "address": "bc1q9d80wqfz", "balance_sat": 870000},
         ]
 
     # sweep everything to staging wallet before XMR swap
-    build_sweep_plan(wallets, destination="bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh")
+    build_sweep_plan(wallets, destination="bc1qxy2")
