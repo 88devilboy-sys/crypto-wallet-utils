@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""
+wallet_monitor.py
+Simple balance monitor for BTC wallets using public APIs.
+Checks balances at interval and logs to CSV.
+
+Author: devilboy88
+"""
+
+import requests
+import csv
+import time
+import sys
+from datetime import datetime
+
+API_BASE = "https://blockchain.info"
+
+def get_balance(address):
+    """Fetch confirmed balance for a BTC address (in satoshis)."""
+    try:
+        r = requests.get(f"{API_BASE}/q/addressbalance/{address}", timeout=10)
+        r.raise_for_status()
+        return int(r.text)
+    except requests.RequestException as e:
+        print(f"[!] Error fetching balance for {address}: {e}")
+        return None
+
+def sat_to_btc(satoshis):
+    return satoshis / 1e8
+
+def monitor(addresses, interval=300, outfile="balances.csv"):
+    """Poll addresses every <interval> seconds and append to CSV."""
+    print(f"[*] Monitoring {len(addresses)} address(es) every {interval}s")
+    print(f"[*] Logging to {outfile}")
+
+    with open(outfile, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "address", "balance_btc"])
+
+    while True:
+        for addr in addresses:
+            bal = get_balance(addr)
+            if bal is not None:
+                btc = sat_to_btc(bal)
+                row = [datetime.utcnow().isoformat(), addr, f"{btc:.8f}"]
+                with open(outfile, "a", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(row)
+                print(f"  {addr[:12]}... => {btc:.8f} BTC")
+        print(f"[*] Next check in {interval}s\n")
+        time.sleep(interval)
+
+if __name__ == "__main__":
+    # ---- testing ----
+    # TODO: move to config file before pushing
+    test_wallets = [
+        "bc1q",   # main
+        "bc1q12",   # cold storage
+    ]
+
+    monitor(test_wallets, interval=600)
