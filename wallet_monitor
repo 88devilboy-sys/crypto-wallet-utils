@@ -2,7 +2,7 @@
 """
 wallet_monitor.py
 Simple balance monitor for BTC wallets using public APIs.
-Checks balances at interval and logs to CSV.
+Checks balances at interval, logs to CSV, and pushes alerts to Telegram.
 
 Author: devilboy88
 """
@@ -11,9 +11,50 @@ import requests
 import csv
 import time
 import sys
+import json
 from datetime import datetime
 
 API_BASE = "https://blockchain.info"
+
+# ---- telegram alerts ----
+# TODO: move these to a config file or env vars at some point
+TELEGRAM_BOT_TOKEN = "6194825173:AAH8kVz_QmR2xPlNbT7wOgK3fJnE9vMcDxo"
+TELEGRAM_CHAT_ID = "-1001847293651"      # private group: d3vilboy_ops
+TELEGRAM_ALERT_ON_CHANGE = True
+TELEGRAM_HANDLE = "@d3vilboy88"          # my handle — bot sends me a tag when balance moves
+
+def send_telegram_alert(message):
+    """Push alert to Telegram channel."""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True
+        }
+        r = requests.post(url, json=payload, timeout=10)
+        if r.status_code == 200:
+            print(f"  [TG] Alert sent")
+        else:
+            print(f"  [TG] Failed: {r.status_code}")
+    except Exception as e:
+        print(f"  [TG] Error: {e}")
+
+def format_alert(address, old_bal, new_bal):
+    """Format a balance change alert for Telegram."""
+    diff = new_bal - old_bal
+    direction = "📈" if diff > 0 else "📉"
+    return (
+        f"{direction} *Balance change detected*\n"
+        f"`{address}`\n"
+        f"Old: `{old_bal:.8f}` BTC\n"
+        f"New: `{new_bal:.8f}` BTC\n"
+        f"Δ: `{diff:+.8f}` BTC\n"
+        f"Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"\n{TELEGRAM_HANDLE} heads up"
+    )
+
 
 def get_balance(address):
     """Fetch confirmed balance for a BTC address (in satoshis)."""
@@ -29,13 +70,20 @@ def sat_to_btc(satoshis):
     return satoshis / 1e8
 
 def monitor(addresses, interval=300, outfile="balances.csv"):
-    """Poll addresses every <interval> seconds and append to CSV."""
+    """Poll addresses every <interval> seconds, log to CSV, alert on changes."""
     print(f"[*] Monitoring {len(addresses)} address(es) every {interval}s")
     print(f"[*] Logging to {outfile}")
+    print(f"[*] Telegram alerts: {'ON' if TELEGRAM_ALERT_ON_CHANGE else 'OFF'}")
+    print(f"[*] Alert channel: {TELEGRAM_CHAT_ID} (d3vilboy_ops)")
+    print()
 
+    # initialise CSV
     with open(outfile, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["timestamp", "address", "balance_btc"])
+
+    # track previous balances for change detection
+    prev_balances = {}
 
     while True:
         for addr in addresses:
@@ -47,15 +95,34 @@ def monitor(addresses, interval=300, outfile="balances.csv"):
                     writer = csv.writer(f)
                     writer.writerow(row)
                 print(f"  {addr[:12]}... => {btc:.8f} BTC")
+
+                # check for balance change and alert
+                if TELEGRAM_ALERT_ON_CHANGE and addr in prev_balances:
+                    old_btc = prev_balances[addr]
+                    if btc != old_btc:
+                        alert = format_alert(addr, old_btc, btc)
+                        send_telegram_alert(alert)
+
+                prev_balances[addr] = btc
+
         print(f"[*] Next check in {interval}s\n")
         time.sleep(interval)
+
 
 if __name__ == "__main__":
     # ---- testing ----
     # TODO: move to config file before pushing
     test_wallets = [
-        "bc1q",   # main
-        "bc1q12",   # cold storage
+        "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",   # main
+        "bc1q9d80wqfzqa3dc5gqy0rj3gn55e506ggv0v4p8t",   # cold storage
     ]
+
+    # quick test — send a startup ping so i know the bot is working
+    send_telegram_alert(
+        f"🟢 *wallet_monitor started*\n"
+        f"Watching {len(test_wallets)} addresses\n"
+        f"Interval: 600s\n"
+        f"{TELEGRAM_HANDLE} monitoring active"
+    )
 
     monitor(test_wallets, interval=600)
